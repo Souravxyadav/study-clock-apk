@@ -1,0 +1,62 @@
+name: Build Study Clock APK v12
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.10.2'
+          cache-provider: basic
+
+      - name: Verify Android project
+        run: |
+          echo "Workspace: $GITHUB_WORKSPACE"
+          test -f settings.gradle
+          test -f app/build.gradle
+          find app/src/main -maxdepth 3 -type f | sort | head -80
+
+      - name: Build debug APK
+        run: |
+          gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Collect generated APK
+        shell: bash
+        run: |
+          set -e
+          echo "Searching for generated APK..."
+          APK=$(find "$GITHUB_WORKSPACE" -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)
+          if [ -z "$APK" ]; then
+            echo "ERROR: No debug APK was generated."
+            echo "Build tree:"
+            find "$GITHUB_WORKSPACE/app/build" -maxdepth 6 -type f 2>/dev/null | sort || true
+            exit 1
+          fi
+          echo "Found: $APK"
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          cp "$APK" "$GITHUB_WORKSPACE/artifacts/study-clock-debug.apk"
+          ls -lh "$GITHUB_WORKSPACE/artifacts/study-clock-debug.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: study-clock-debug-apk
+          path: artifacts/study-clock-debug.apk
+          if-no-files-found: error
+          
